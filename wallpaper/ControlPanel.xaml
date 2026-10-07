@@ -1,0 +1,141 @@
+<Window x:Class="WallpaperApp.ControlPanel"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Hareketli Duvar Kağıdı"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResize"
+        Width="520" Height="720"
+        MinWidth="460" MinHeight="560"
+        Closing="OnClosing">
+    <Border Background="{StaticResource BrushBackground}" CornerRadius="16" BorderBrush="#33FFFFFF" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Başlık çubuğu -->
+            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnTitleBarMouseDown">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <Ellipse Width="10" Height="10" Fill="{StaticResource BrushAccent}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Hareketli Duvar Kağıdı" Foreground="{StaticResource BrushText}"
+                               FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Button Style="{StaticResource WindowButton}" Content="─" Click="OnMinimizeClick"/>
+                    <Button Style="{StaticResource WindowButton}" Content="✕" Click="OnCloseClick"/>
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,8,20,20">
+                <StackPanel>
+
+                    <!-- Video / GIF -->
+                    <Border Style="{StaticResource Card}" Margin="0,8,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Video / GIF"/>
+                            <TextBlock Style="{StaticResource MutedText}" Text="MP4, MKV, WebM veya GIF dosyası seçin" Margin="0,2,0,12"/>
+                            <Button x:Name="SelectButton" Style="{StaticResource PrimaryButton}" Content="Video / GIF Seç"
+                                    Click="OnSelectVideoClick" HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="SelectedFileText" Style="{StaticResource MutedText}" Text="Hiçbir dosya seçilmedi"
+                                       TextTrimming="CharacterEllipsis" Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Doldurma modu -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Doldurma Modu"/>
+                            <TextBlock Style="{StaticResource MutedText}" Text="Videonun ekrana nasıl sığacağı" Margin="0,2,0,10"/>
+                            <ComboBox x:Name="StretchCombo" Style="{StaticResource ModernComboBox}" SelectionChanged="OnStretchChanged">
+                                <ComboBoxItem Tag="UniformToFill" Content="Ekranı Orantılı Kapla (Varsayılan)"/>
+                                <ComboBoxItem Tag="Fill" Content="Ekrana Tam Sığdır / Esnet"/>
+                                <ComboBoxItem Tag="Uniform" Content="Oranları Koru (Siyah Boşluk Bırak)"/>
+                                <ComboBoxItem Tag="None" Content="Orijinal Boyut / Merkeze Hizala"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Çözünürlük ve ölçek -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Çözünürlük ve Ölçek"/>
+                            <TextBlock x:Name="DetectedResText" Style="{StaticResource MutedText}" Margin="0,2,0,10"/>
+                            <CheckBox x:Name="AutoResCheck" Style="{StaticResource ModernCheckBox}" Content="Otomatik (ekran çözünürlüğünü kullan)"
+                                      IsChecked="True" Checked="OnAutoResChanged" Unchecked="OnAutoResChanged"/>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource LabelText}" Text="Genişlik (px)"/>
+                                    <TextBox x:Name="WidthBox" Style="{StaticResource ModernTextBox}" TextChanged="OnResolutionTextChanged"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource LabelText}" Text="Yükseklik (px)"/>
+                                    <TextBox x:Name="HeightBox" Style="{StaticResource ModernTextBox}" TextChanged="OnResolutionTextChanged"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Style="{StaticResource LabelText}" Text="Ölçek (%)" Margin="0,14,0,4"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="ScaleSlider" Style="{StaticResource ModernSlider}" Minimum="25" Maximum="400" Value="100"
+                                        ValueChanged="OnScaleChanged"/>
+                                <TextBlock x:Name="ScaleValueText" Grid.Column="1" Style="{StaticResource MutedText}" Text="100%"
+                                           Margin="10,0,0,0" VerticalAlignment="Center" MinWidth="42" TextAlignment="Right"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Ses -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Ses"/>
+                            <CheckBox x:Name="MuteCheck" Style="{StaticResource ModernCheckBox}" Content="Sessiz (Mute)" IsChecked="True"
+                                      Checked="OnMuteChanged" Unchecked="OnMuteChanged"/>
+                            <TextBlock Style="{StaticResource LabelText}" Text="Ses Seviyesi" Margin="0,14,0,4"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="VolumeSlider" Style="{StaticResource ModernSlider}" Minimum="0" Maximum="100" Value="0"
+                                        ValueChanged="OnVolumeChanged"/>
+                                <TextBlock x:Name="VolumeValueText" Grid.Column="1" Style="{StaticResource MutedText}" Text="%0"
+                                           Margin="10,0,0,0" VerticalAlignment="Center" MinWidth="42" TextAlignment="Right"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Oynatma -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Oynatma"/>
+                            <TextBlock Style="{StaticResource MutedText}" Text="Videoyu duraklatmak veya sürdürmek için" Margin="0,2,0,12"/>
+                            <Button x:Name="PlayPauseButton" Style="{StaticResource SecondaryButton}" Content="Duraklat / Oynat"
+                                    Click="OnPlayPauseClick" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Güncelleme -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="Güncelleme"/>
+                            <TextBlock x:Name="UpdateStatusText" Style="{StaticResource MutedText}" Margin="0,2,0,12" TextWrapping="Wrap"/>
+                            <Button x:Name="UpdateButton" Style="{StaticResource SecondaryButton}" Content="Güncellemeleri Denetle"
+                                    Click="OnUpdateClick" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</Window>

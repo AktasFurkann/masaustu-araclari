@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+apextube/build/
+apextube/dist/
+apextube/*.spec
+
+# .NET
+wallpaper/bin/
+wallpaper/obj/
+wallpaper/publish/
+.vs/
+
+# Kurulum çıktısı
+installer/Output/
+
+# Test videoları
+*.mp4
+*.mkv
+*.webm
+*.mp3

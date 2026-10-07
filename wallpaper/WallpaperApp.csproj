@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    net9.0-windows : Bu makinede kurulu .NET 9 SDK ile doğrudan derlenebilir.
+    Sıfır bağımlılık (standalone) tek dosya dağıtım komutu README.md içinde verilmiştir.
+
+    Windows 10/11'de hazır gelen .NET Framework 4.8 (çalışma zamanı kurulumu gerektirmez)
+    için aşağıdaki satırı değiştirin:
+      <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF> aynen kalır; kodun tamamı net48 ile de uyumludur.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- DPI farkındalığı WPF için manifest (app.manifest) üzerinden tanımlanır;
+         WinForms yalnızca NotifyIcon için kullanıldığından WFO0003 bilgi amaçlı bastırılır. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>WallpaperApp</RootNamespace>
+    <AssemblyName>WallpaperApp</AssemblyName>
+    <AssemblyTitle>Hareketli Duvar Kağıdı</AssemblyTitle>
+    <Product>Hareketli Duvar Kağıdı</Product>
+    <Description>4K Hareketli Masaüstü Duvar Kağıdı</Description>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- Yalnızca 64-bit VLC dosyaları kopyalansın (x86 + ARM64 ~190 MB gereksiz yer kaplıyor). -->
+    <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
+    <VlcWindowsArm64Enabled>false</VlcWindowsArm64Enabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LibVLCSharp" Version="3.10.1" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+  </ItemGroup>
+
+</Project>

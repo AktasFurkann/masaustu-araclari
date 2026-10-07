@@ -1,0 +1,22 @@
+<Window x:Class="WallpaperApp.WallpaperWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Wallpaper"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="False"
+        AllowsTransparency="False"
+        Background="Black"
+        Loaded="OnLoaded"
+        SourceInitialized="OnSourceInitialized"
+        Closing="OnClosing">
+    <!-- Video yüzeyi (VLC'nin çizdiği WinForms paneli) kod tarafında Root'a eklenir. -->
+    <Grid x:Name="Root">
+        <Image x:Name="GifImage"
+               Stretch="UniformToFill"
+               Visibility="Collapsed"
+               RenderOptions.BitmapScalingMode="Fant"/>
+    </Grid>
+</Window>
