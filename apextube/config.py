@@ -38,6 +38,9 @@ SETTINGS_FILE = APP_DATA_DIR / "settings.json"
 EXTENSION_DIR = APP_DATA_DIR / "browser_extension"
 BRIDGE_PORT = 47321
 
+# Analizin en fazla süresi; sunucu cevap vermezse arayüz beklemeyi bırakıp hata gösterir
+ANALYSIS_TIMEOUT_SEC = 60
+
 # Varsayılan İndirme Klasörü
 DEFAULT_DOWNLOAD_DIR = str(Path.home() / "Downloads")
 

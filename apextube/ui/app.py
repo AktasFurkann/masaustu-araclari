@@ -11,7 +11,7 @@ import customtkinter as ctk
 
 from config import (
     APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT,
-    MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, DEFAULT_DOWNLOAD_DIR
+    MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, DEFAULT_DOWNLOAD_DIR, ANALYSIS_TIMEOUT_SEC
 )
 from ui.styles import (
     COLOR_BG_MAIN, COLOR_BG_CARD, COLOR_BG_INPUT, COLOR_BORDER,
@@ -50,6 +50,7 @@ class ModernDownloaderApp(ctk.CTk):
         self.history_manager = HistoryManager()
         self.current_downloader = None
         self.is_analyzing = False
+        self.analysis_id = 0
         self.analyzed_video_data = None
         self.analyzed_thumbnail_img = None
         # Tarayıcı eklentisinden gelen son bağlantı ve ona ait istek başlıkları / sayfa başlığı
@@ -188,12 +189,14 @@ class ModernDownloaderApp(ctk.CTk):
         self.after(300, lambda: self.attributes("-topmost", False))
         self.focus_force()
 
-        if self.is_analyzing or (self.current_downloader and self.current_downloader.is_alive()):
+        if self.current_downloader and self.current_downloader.is_alive():
             messagebox.showwarning(
                 "Tarayıcı Eklentisi",
-                "Şu an devam eden bir analiz veya indirme var. Bitince eklentiden tekrar gönderin."
+                "Şu an devam eden bir indirme var. Bitince eklentiden tekrar gönderin."
             )
             return
+        if self.is_analyzing:
+            self._cancel_analysis()  # yeni gönderilen bağlantı, süren analizin yerini alır
 
         self.extension_link = link
         self.url_entry.delete(0, "end")
@@ -424,6 +427,9 @@ class ModernDownloaderApp(ctk.CTk):
             return
 
         self.is_analyzing = True
+        # Her analizin bir kimliği var: iptal edilen ya da süresi dolan analizin sonucu sonradan gelirse yok sayılır.
+        self.analysis_id += 1
+        analysis_id = self.analysis_id
         self.analyze_btn.configure(state="disabled", text="⏳ Analiz...")
         self.paste_btn.configure(state="disabled")
 
@@ -439,24 +445,67 @@ class ModernDownloaderApp(ctk.CTk):
 
         loading_lbl = ctk.CTkLabel(
             loading_frame,
-            text="🔄 4K/8K çözünürlükler ve video süresi taranıyor, lütfen bekleyin...",
+            text="🔄 Video bilgileri ve kaliteler alınıyor, lütfen bekleyin...",
             font=FONT_SUBTITLE,
             text_color=COLOR_ACCENT
         )
-        loading_lbl.pack(pady=30)
+        loading_lbl.pack(pady=(26, 4))
+
+        elapsed_lbl = ctk.CTkLabel(loading_frame, text="", font=FONT_SMALL, text_color=COLOR_TEXT_MUTED)
+        elapsed_lbl.pack()
+
+        cancel_btn = ctk.CTkButton(
+            loading_frame,
+            text="İptal",
+            font=FONT_BODY,
+            fg_color="transparent",
+            hover_color=COLOR_BORDER,
+            text_color=COLOR_TEXT_SECONDARY,
+            border_width=1,
+            border_color=COLOR_BORDER,
+            width=90,
+            height=30,
+            command=self._cancel_analysis
+        )
+        cancel_btn.pack(pady=(10, 22))
 
         link = self.extension_link if self.extension_link and self.extension_link["url"] == url else {}
-        threading.Thread(target=self._run_analysis_worker, args=(url, link), daemon=True).start()
+        threading.Thread(target=self._run_analysis_worker, args=(url, link, analysis_id), daemon=True).start()
+        self._tick_analysis(analysis_id, elapsed_lbl, 0)
 
-    def _run_analysis_worker(self, url: str, link: dict) -> None:
+    def _tick_analysis(self, analysis_id: int, label, seconds: int) -> None:
+        if analysis_id != self.analysis_id or not self.is_analyzing:
+            return
+        if seconds >= ANALYSIS_TIMEOUT_SEC:
+            self._on_analysis_error(
+                f"Video sunucusu {ANALYSIS_TIMEOUT_SEC} saniye içinde cevap vermedi.\n\n"
+                "Sunucu yavaş, yoğun ya da isteği bekletiyor olabilir. Bir süre sonra tekrar deneyin; "
+                "eklentiden gönderdiyseniz sayfayı yenileyip videoyu tekrar oynatın.",
+                analysis_id
+            )
+            return
+        label.configure(text=f"Geçen süre: {seconds} sn  (en fazla {ANALYSIS_TIMEOUT_SEC} sn beklenir)")
+        self.after(1000, lambda: self._tick_analysis(analysis_id, label, seconds + 1))
+
+    def _cancel_analysis(self) -> None:
+        # Arka plandaki istek durdurulamaz; sonucu geldiğinde kimlik eşleşmeyeceği için yok sayılır.
+        self.analysis_id += 1
+        self.is_analyzing = False
+        self.analyze_btn.configure(state="normal", text="🔍 Analiz Et")
+        self.paste_btn.configure(state="normal")
+        self._show_welcome_view()
+
+    def _run_analysis_worker(self, url: str, link: dict, analysis_id: int) -> None:
         try:
             data = VideoAnalyzer.analyze_url(url, link.get("http_headers"), link.get("title"))
             thumb_img = VideoAnalyzer.fetch_thumbnail_image(data.get("thumbnail_url"))
-            self.after(0, lambda: self._on_analysis_success(data, thumb_img))
+            self.after(0, lambda: self._on_analysis_success(data, thumb_img, analysis_id))
         except Exception as e:
-            self.after(0, lambda: self._on_analysis_error(str(e)))
+            self.after(0, lambda err=e: self._on_analysis_error(str(err), analysis_id))
 
-    def _on_analysis_success(self, data: dict, thumb_img) -> None:
+    def _on_analysis_success(self, data: dict, thumb_img, analysis_id: int) -> None:
+        if analysis_id != self.analysis_id:
+            return
         self.is_analyzing = False
         self.analyze_btn.configure(state="normal", text="🔍 Analiz Et")
         self.paste_btn.configure(state="normal")
@@ -476,7 +525,10 @@ class ModernDownloaderApp(ctk.CTk):
         )
         self.video_card.pack(fill="x", pady=4)
 
-    def _on_analysis_error(self, error_message: str) -> None:
+    def _on_analysis_error(self, error_message: str, analysis_id: int) -> None:
+        if analysis_id != self.analysis_id:
+            return
+        self.analysis_id += 1  # süre dolduysa geç gelen sonuç da yok sayılsın
         self.is_analyzing = False
         self.analyze_btn.configure(state="normal", text="🔍 Analiz Et")
         self.paste_btn.configure(state="normal")

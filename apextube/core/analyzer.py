@@ -44,6 +44,9 @@ class VideoAnalyzer:
             'extract_flat': False,
             'noplaylist': True,  # Playlist'ten sadece tek videoyu al
             'playlist_items': '1',  # Birden çok video içeren sayfalarda yalnızca ilki
+            # Cevap vermeyen sunucuda tek istek uzun süre ve defalarca beklenmesin
+            'socket_timeout': 15,
+            'extractor_retries': 1,
         }
         if http_headers:
             ydl_opts['http_headers'] = http_headers
