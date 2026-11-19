@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable, Optional, Dict, Any, Tuple
 import yt_dlp
 from yt_dlp.downloader import external as _yt_external
-from yt_dlp.utils import download_range_func
+from yt_dlp.utils import download_range_func, sanitize_filename as yt_sanitize_filename
 
 from utils.helpers import first_entry, friendly_error, format_bytes, format_speed, format_seconds, sanitize_filename, clean_playlist_params
 from core.ffmpeg_checker import FFmpegChecker
@@ -114,6 +114,8 @@ class VideoDownloader:
         resolution_label: str = "En Yüksek Kalite (Otomatik 4K/8K)",
         output_format: str = "MP4 (Orijinal AV1 / VP9 - Küçük Boyut, Önerilen)",
         time_range: Optional[Tuple[float, float]] = None,
+        http_headers: Optional[Dict[str, str]] = None,
+        custom_title: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_complete: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
@@ -124,6 +126,8 @@ class VideoDownloader:
         self.resolution_label = resolution_label
         self.output_format = output_format
         self.time_range = time_range  # (start_sec, end_sec)
+        self.http_headers = http_headers or {}
+        self.custom_title = custom_title  # doğrudan akışlarda sayfa başlığı
 
         self.on_progress = on_progress
         self.on_complete = on_complete
@@ -418,7 +422,12 @@ class VideoDownloader:
             else:
                 quality_tag = '%(height& [{}p]|)s'
 
-            out_template = os.path.join(self.download_dir, f'%(title).90s{quality_tag}{range_tag}.%(ext)s')
+            if self.custom_title:
+                # Şablonda düz metin olarak durduğu için yt-dlp temizlemez; '%' şablon karakteridir.
+                title_part = yt_sanitize_filename(self.custom_title)[:90].replace('%', '%%')
+            else:
+                title_part = '%(title).90s'
+            out_template = os.path.join(self.download_dir, f'{title_part}{quality_tag}{range_tag}.%(ext)s')
 
             ydl_opts = {
                 'format': format_str,
@@ -456,6 +465,8 @@ class VideoDownloader:
                     daemon=True,
                 ).start()
 
+            if self.http_headers:
+                ydl_opts['http_headers'] = self.http_headers
             if merge_format:
                 ydl_opts['merge_output_format'] = merge_format
             if is_h264_wallpaper and ext_suffix == 'mp4':
@@ -474,7 +485,7 @@ class VideoDownloader:
                         pass
             self._final_info = info
 
-            title = info.get('title', 'Video')
+            title = self.custom_title or info.get('title', 'Video')
             final_path = self._find_actual_downloaded_file(self.download_dir, title, ext_suffix)
 
             if not final_path:

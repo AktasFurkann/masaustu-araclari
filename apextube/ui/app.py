@@ -27,6 +27,7 @@ from core.analyzer import VideoAnalyzer
 from core.downloader import VideoDownloader
 from core.ffmpeg_checker import FFmpegChecker
 from core import updater
+from core.bridge import LinkBridge, install_extension_files
 from utils.helpers import is_supported_url, open_file_in_explorer, play_media_file, open_directory
 from utils.history_manager import HistoryManager
 
@@ -51,6 +52,8 @@ class ModernDownloaderApp(ctk.CTk):
         self.is_analyzing = False
         self.analyzed_video_data = None
         self.analyzed_thumbnail_img = None
+        # Tarayıcı eklentisinden gelen son bağlantı ve ona ait istek başlıkları / sayfa başlığı
+        self.extension_link = None
 
         self.ffmpeg_ok, self.ffmpeg_path, self.ffmpeg_version = FFmpegChecker.verify_ffmpeg()
 
@@ -59,11 +62,15 @@ class ModernDownloaderApp(ctk.CTk):
         self._build_content_area()
         self._build_history_section()
 
+        self.bridge = LinkBridge(on_link=lambda link: self.after(0, lambda: self._on_extension_link(link)))
+        self.bridge_ok = self.bridge.start()
+        threading.Thread(target=self._refresh_extension_files, daemon=True).start()
+
     def _build_header(self) -> None:
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.header_frame.pack(fill="x", padx=24, pady=(20, 12))
         self.header_frame.grid_columnconfigure(0, weight=1)
-        self.header_frame.grid_columnconfigure((1, 2), weight=0)
+        self.header_frame.grid_columnconfigure((1, 2, 3), weight=0)
 
         title_box = ctk.CTkFrame(self.header_frame, fg_color="transparent")
         title_box.grid(row=0, column=0, sticky="w")
@@ -100,7 +107,7 @@ class ModernDownloaderApp(ctk.CTk):
             height=28,
             command=self._show_ffmpeg_info
         )
-        self.ffmpeg_btn.grid(row=0, column=2, sticky="e")
+        self.ffmpeg_btn.grid(row=0, column=3, sticky="e")
 
         self.update_btn = ctk.CTkButton(
             self.header_frame,
@@ -115,12 +122,83 @@ class ModernDownloaderApp(ctk.CTk):
             height=28,
             command=self._on_update_click
         )
-        self.update_btn.grid(row=0, column=1, sticky="e", padx=(0, 8))
+        self.update_btn.grid(row=0, column=2, sticky="e", padx=(0, 8))
+
+        self.extension_btn = ctk.CTkButton(
+            self.header_frame,
+            text="🧩 Tarayıcı Eklentisi",
+            font=FONT_BADGE,
+            text_color=COLOR_TEXT_PRIMARY,
+            fg_color=COLOR_BG_INPUT,
+            hover_color=COLOR_BORDER,
+            border_width=1,
+            border_color=COLOR_BORDER,
+            corner_radius=20,
+            height=28,
+            command=self._show_extension_setup
+        )
+        self.extension_btn.grid(row=0, column=1, sticky="e", padx=(0, 8))
         self.available_update = None
         self.is_updating = False
 
         if updater.can_self_update():
             threading.Thread(target=self._check_update_in_background, daemon=True).start()
+
+    # --- Tarayıcı eklentisi ---
+
+    @staticmethod
+    def _refresh_extension_files() -> None:
+        # Program güncellenince eklentinin kalıcı kopyası da güncellensin (Chrome'da "Yeniden yükle" yeterli).
+        try:
+            install_extension_files()
+        except OSError:
+            pass
+
+    def _show_extension_setup(self) -> None:
+        try:
+            folder = install_extension_files()
+        except OSError as e:
+            messagebox.showerror("Tarayıcı Eklentisi", f"Eklenti dosyaları hazırlanamadı:\n\n{e}")
+            return
+        open_directory(folder)
+        self.clipboard_clear()
+        self.clipboard_append("chrome://extensions")
+
+        status = "" if self.bridge_ok else (
+            "\n\n⚠ Eklenti bağlantısı başlatılamadı (başka bir ApexTube penceresi açık olabilir)."
+        )
+        messagebox.showinfo(
+            "Tarayıcı Eklentisi",
+            "Eklenti, sayfada oynatılan videoları bulur ve tek tıkla ApexTube'a gönderir.\n\n"
+            "Kurulum (Chrome / Edge, bir kerelik):\n"
+            "1. Adres çubuğuna chrome://extensions yazın (panoya kopyalandı; Edge'de edge://extensions).\n"
+            "2. Sağ üstten \"Geliştirici modu\"nu açın.\n"
+            "3. \"Paketlenmemiş öğe yükle\" düğmesine basın ve az önce açılan klasörü seçin:\n"
+            f"   {folder}\n\n"
+            "Kullanım: Videoyu oynatın, eklenti simgesine tıklayın ve \"ApexTube ile indir\"e basın. "
+            "ApexTube açık olmalıdır.\n\n"
+            "DRM korumalı servislerdeki (Netflix, Prime Video vb.) videolar indirilemez." + status
+        )
+
+    def _on_extension_link(self, link: dict) -> None:
+        # Pencereyi öne getir
+        self.deiconify()
+        self.lift()
+        self.attributes("-topmost", True)
+        self.after(300, lambda: self.attributes("-topmost", False))
+        self.focus_force()
+
+        if self.is_analyzing or (self.current_downloader and self.current_downloader.is_alive()):
+            messagebox.showwarning(
+                "Tarayıcı Eklentisi",
+                "Şu an devam eden bir analiz veya indirme var. Bitince eklentiden tekrar gönderin."
+            )
+            return
+
+        self.extension_link = link
+        self.url_entry.delete(0, "end")
+        self.url_entry.insert(0, link["url"])
+        self.start_analysis()
 
     # --- Güncelleme ---
 
@@ -226,7 +304,7 @@ class ModernDownloaderApp(ctk.CTk):
 
         self.url_entry = ctk.CTkEntry(
             self.url_card,
-            placeholder_text="Video bağlantısını buraya yapıştırın (YouTube, Vimeo, X, Instagram, doğrudan .mp4/.m3u8...)",
+            placeholder_text="Video bağlantısını buraya yapıştırın (YouTube, X, Instagram, Twitch, doğrudan .mp4/.m3u8...)",
             font=FONT_BODY,
             fg_color=COLOR_BG_INPUT,
             border_color=COLOR_BORDER,
@@ -367,11 +445,12 @@ class ModernDownloaderApp(ctk.CTk):
         )
         loading_lbl.pack(pady=30)
 
-        threading.Thread(target=self._run_analysis_worker, args=(url,), daemon=True).start()
+        link = self.extension_link if self.extension_link and self.extension_link["url"] == url else {}
+        threading.Thread(target=self._run_analysis_worker, args=(url, link), daemon=True).start()
 
-    def _run_analysis_worker(self, url: str) -> None:
+    def _run_analysis_worker(self, url: str, link: dict) -> None:
         try:
-            data = VideoAnalyzer.analyze_url(url)
+            data = VideoAnalyzer.analyze_url(url, link.get("http_headers"), link.get("title"))
             thumb_img = VideoAnalyzer.fetch_thumbnail_image(data.get("thumbnail_url"))
             self.after(0, lambda: self._on_analysis_success(data, thumb_img))
         except Exception as e:
@@ -438,6 +517,8 @@ class ModernDownloaderApp(ctk.CTk):
             resolution_label=resolution_label,
             output_format=output_format,
             time_range=time_range,
+            http_headers=self.analyzed_video_data.get("http_headers"),
+            custom_title=self.analyzed_video_data.get("custom_title"),
             on_progress=lambda data: self.after(0, lambda: self.progress_widget.update_progress(data)),
             on_complete=lambda data: self.after(0, lambda: self._on_download_complete(data)),
             on_error=lambda err: self.after(0, lambda: self._on_download_error(err)),

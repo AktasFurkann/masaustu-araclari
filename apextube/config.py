@@ -33,6 +33,11 @@ APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE = APP_DATA_DIR / "download_history.json"
 SETTINGS_FILE = APP_DATA_DIR / "settings.json"
 
+# Tarayıcı eklentisi: dosyaların kalıcı kopyası ve eklentinin bağlandığı yerel port
+# (port, browser_extension/background.js ve popup.js içindeki değerle aynı olmalı)
+EXTENSION_DIR = APP_DATA_DIR / "browser_extension"
+BRIDGE_PORT = 47321
+
 # Varsayılan İndirme Klasörü
 DEFAULT_DOWNLOAD_DIR = str(Path.home() / "Downloads")
 

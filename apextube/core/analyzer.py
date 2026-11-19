@@ -4,6 +4,7 @@ ApexTube 8K Video Downloader - Video Analiz Modülü
 import copy
 import io
 import requests
+from urllib.parse import urlparse
 from typing import Dict, Any, List, Optional
 from PIL import Image
 import yt_dlp
@@ -18,10 +19,15 @@ class VideoAnalyzer:
     """Video URL'sini analiz ederek başlık, küçük resim, süre ve çözünürlükleri çıkarır."""
 
     @classmethod
-    def analyze_url(cls, url: str) -> Dict[str, Any]:
+    def analyze_url(cls, url: str, http_headers: Optional[Dict[str, str]] = None,
+                    title_hint: Optional[str] = None) -> Dict[str, Any]:
         """
         Videoyu indirmeden analiz eder ve 4K/8K dahil tüm mevcut çözünürlükleri çıkarır.
         YouTube dışında yt-dlp'nin desteklediği siteler ve doğrudan video bağlantıları da çalışır.
+
+        http_headers: Tarayıcı eklentisinden gelen Referer/Origin/User-Agent; bazı sunucular akışı
+        yalnızca oynatıcı sayfasından istenmiş gibi görünürse verir.
+        title_hint: Doğrudan akış bağlantılarında başlık "master" gibi anlamsız olduğu için sayfa başlığı.
         """
         if not is_supported_url(url):
             raise ValueError("Geçersiz bağlantı! Lütfen http(s) ile başlayan bir video adresi girin.")
@@ -39,6 +45,8 @@ class VideoAnalyzer:
             'noplaylist': True,  # Playlist'ten sadece tek videoyu al
             'playlist_items': '1',  # Birden çok video içeren sayfalarda yalnızca ilki
         }
+        if http_headers:
+            ydl_opts['http_headers'] = http_headers
         if ffmpeg_path:
             ydl_opts['ffmpeg_location'] = ffmpeg_path
 
@@ -55,6 +63,15 @@ class VideoAnalyzer:
         title = info.get('title', 'Bilinmeyen Video')
         channel = (info.get('uploader') or info.get('channel')
                    or info.get('webpage_url_domain') or 'Bilinmeyen Kaynak')
+
+        # Doğrudan akış bağlantısı (yt-dlp'nin genel ayrıştırıcısı): sayfa adı ve sitesi daha anlamlı
+        custom_title = None
+        if info.get('extractor_key') == 'Generic':
+            if title_hint:
+                title = custom_title = title_hint
+            referer_host = urlparse((http_headers or {}).get('Referer', '')).netloc
+            if referer_host:
+                channel = referer_host
         duration_sec = info.get('duration') or 0
         duration_str = format_seconds(duration_sec)
         view_count = info.get('view_count', 0)
@@ -147,7 +164,9 @@ class VideoAnalyzer:
         return {
             "id": info.get('id'),
             "url": clean_url,
+            "http_headers": http_headers or {},
             "title": title,
+            "custom_title": custom_title,
             "channel": channel,
             "duration_sec": duration_sec,
             "duration_str": duration_str,

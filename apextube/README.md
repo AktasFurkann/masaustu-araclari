@@ -6,6 +6,19 @@ YouTube dışında `yt-dlp`'nin desteklediği diğer siteler (X/Twitter, Instagr
 
 ---
 
+### 🧩 Tarayıcı Eklentisi (Video Yakalayıcı)
+
+Videonun bir oynatıcıya gömülü olduğu ve sayfa bağlantısının tek başına yetmediği durumlar için `browser_extension/` klasöründe bir Chrome/Edge eklentisi bulunur:
+
+- Sayfanın ağ trafiğinden HLS (`.m3u8`), DASH (`.mpd`) ve MP4/WebM akışlarını yakalar; parçaları (`.ts`, `.m4s`), altyazıları ve küçük reklam videolarını eler.
+- Simgedeki rozet, o sekmede bulunan video sayısını gösterir. **ApexTube ile indir** düğmesi bağlantıyı açık olan ApexTube'a gönderir.
+- Akışı isteyen oynatıcının `Referer`, `Origin` ve `User-Agent` başlıkları da aktarılır (bazı sunucular akışı yalnızca oynatıcı sayfasından gelen isteklere verir). Çerez ve oturum bilgisi aktarılmaz.
+- ApexTube, eklentiyi `127.0.0.1:47321` üzerinden dinler ve yalnızca tarayıcı eklentilerinden (`chrome-extension://` kökenli) gelen istekleri kabul eder; ziyaret edilen web sayfaları indirme başlatamaz.
+
+**Kurulum:** ApexTube'da başlıktaki **🧩 Tarayıcı Eklentisi** düğmesine basın. Eklenti dosyaları `%APPDATA%\ApexTube\browser_extension` klasörüne çıkarılır; ardından `chrome://extensions` → **Geliştirici modu** → **Paketlenmemiş öğe yükle** ile bu klasörü seçin. Program güncellenince klasör de güncellenir; eklentiler sayfasında **Yeniden yükle** demeniz yeterlidir.
+
+---
+
 ## 🏗️ 1. Mimari Tasarım ve Çalışma Prensibi
 
 YouTube, 1080p ve üzeri çözünürlüklerde (2K, 4K, 8K) bant genişliğini optimize etmek amacıyla ses ve görüntüyü **ayrı DASH akışları** (Video: VP9/AV01, Ses: Opus/AAC) olarak sunar.

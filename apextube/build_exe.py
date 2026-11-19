@@ -39,6 +39,7 @@ def build(copy_to_desktop: bool = True) -> bool:
         "--collect-all", "customtkinter", # CustomTkinter tema ve font dosyaları
         "--collect-all", "imageio_ffmpeg",# Gömülü FFmpeg binary'si
         "--collect-all", "yt_dlp",        # yt-dlp ayrıştırıcıları
+        "--add-data", f"{base_dir / 'browser_extension'}{os.pathsep}browser_extension",  # Tarayıcı eklentisi
         str(main_file)
     ]
 
