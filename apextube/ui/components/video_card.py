@@ -110,7 +110,7 @@ class VideoInfoCard(ctk.CTkFrame):
         self.badges_frame = ctk.CTkFrame(self.details_frame, fg_color="transparent")
         self.badges_frame.grid(row=1, column=0, sticky="w", pady=(0, 8))
 
-        channel_name = self.video_data.get("channel", "YouTube")
+        channel_name = self.video_data.get("channel", "Bilinmeyen Kaynak")
         self.channel_badge = ctk.CTkLabel(
             self.badges_frame,
             text=f"📺 {channel_name}",
@@ -383,7 +383,7 @@ class VideoInfoCard(ctk.CTkFrame):
 
         size = estimate_output_bytes(entry, duration, clip_sec)
         if size is None:
-            self.size_label.configure(text="💾 Tahmini boyut: Bilinmiyor (YouTube bu kalite için boyut bildirmiyor)")
+            self.size_label.configure(text="💾 Tahmini boyut: Bilinmiyor (site bu kalite için boyut bildirmiyor)")
             return
 
         text = f"💾 Tahmini boyut: ~{format_bytes(size)}"

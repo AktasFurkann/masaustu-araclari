@@ -2,7 +2,7 @@
 
 İki Windows programı ve ikisini birlikte kuran tek bir kurulum dosyası:
 
-- **ApexTube 8K Downloader** (`apextube/`): YouTube'dan 8K'ya kadar video, klip (zaman aralığı) ve MP3 indirici. Python + CustomTkinter, yt-dlp ve FFmpeg.
+- **ApexTube 8K Downloader** (`apextube/`): YouTube ve yt-dlp'nin desteklediği diğer sitelerden 8K'ya kadar video, klip (zaman aralığı) ve MP3 indirici. Python + CustomTkinter, yt-dlp ve FFmpeg.
 - **Hareketli Duvar Kağıdı** (`wallpaper/`): Videoyu masaüstü arka planında oynatır. .NET 9 WPF + LibVLC (AV1/VP9/H.264, GPU hızlandırmalı).
 
 ## Kurulum (kullanıcılar için)

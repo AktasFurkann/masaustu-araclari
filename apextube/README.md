@@ -2,6 +2,8 @@
 
 ApexTube, YouTube videolarını **4K, 8K (4320p), 60 FPS ve HDR10** kalitelerinde kayıpsız ses ve görüntü birleştirmesi (Muxing) ile indirebilen, modern karanlık temaya sahip, çok iş parçacıklı (multi-threaded) bir masaüstü uygulamasıdır.
 
+YouTube dışında `yt-dlp`'nin desteklediği diğer siteler (X/Twitter, Instagram, Twitch, Dailymotion vb.) ve doğrudan `.mp4` / `.m3u8` (HLS) / `.mpd` (DASH) video bağlantıları da desteklenir. Birden çok video içeren sayfalarda ilk video alınır. DRM korumalı içerikler (Netflix, Prime Video, Disney+ vb.) indirilemez.
+
 ---
 
 ## 🏗️ 1. Mimari Tasarım ve Çalışma Prensibi
@@ -34,7 +36,7 @@ mp4donusturucu/
 │
 ├── core/
 │   ├── __init__.py
-│   ├── analyzer.py             # YouTube meta veri ve çözünürlük analizcisi
+│   ├── analyzer.py             # Video meta veri ve çözünürlük analizcisi
 │   ├── downloader.py           # yt-dlp & FFmpeg çok iş parçacıklı indirme motoru
 │   └── ffmpeg_checker.py       # FFmpeg algılama, doğrulama ve yönlendirme
 │

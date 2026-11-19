@@ -6,7 +6,8 @@ import re
 import sys
 import subprocess
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
+from urllib.parse import urlparse
 
 # YouTube URL Doğrulama Deseni (Standart, Kısaltılmış youtu.be, Shorts, Canlı Yayınlar ve Playlist Parametreleri)
 YOUTUBE_URL_REGEX = re.compile(
@@ -15,6 +16,33 @@ YOUTUBE_URL_REGEX = re.compile(
     r'([&?].*)?$',
     re.IGNORECASE
 )
+
+
+def friendly_error(err: Exception) -> str:
+    """yt-dlp hatalarından sık görülenleri kullanıcıya anlaşılır biçimde döndürür."""
+    msg = re.sub(r'\x1b\[[0-9;]*m', '', str(err))  # terminal renk kodları
+    msg = re.sub(r'^ERROR:\s*', '', msg)
+    if 'DRM' in msg:
+        return "Bu video DRM ile korunuyor; indirilemez."
+    if 'Unsupported URL' in msg:
+        return "Bu sayfada indirilebilir bir video bulunamadı ya da site desteklenmiyor."
+    return msg
+
+
+def first_entry(info: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Birden fazla video içeren sayfalarda (oynatma listesi vb.) ilk videoyu döndürür."""
+    while info and info.get('entries') is not None:
+        info = next((e for e in info['entries'] if e), None)
+    return info
+
+
+def is_supported_url(url: str) -> bool:
+    """Verilen metnin http(s) ile başlayan bir web adresi olup olmadığını denetler.
+    Sitenin gerçekten desteklenip desteklenmediğine analiz sırasında yt-dlp karar verir."""
+    if not url or not isinstance(url, str):
+        return False
+    parsed = urlparse(url.strip())
+    return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
 
 
 def is_valid_youtube_url(url: str) -> bool:

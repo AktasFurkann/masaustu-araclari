@@ -23,11 +23,11 @@ from ui.styles import (
 from ui.components.video_card import VideoInfoCard
 from ui.components.progress_widget import ProgressWidget
 from ui.components.history_list import HistoryListView
-from core.analyzer import YouTubeAnalyzer
+from core.analyzer import VideoAnalyzer
 from core.downloader import VideoDownloader
 from core.ffmpeg_checker import FFmpegChecker
 from core import updater
-from utils.helpers import is_valid_youtube_url, open_file_in_explorer, play_media_file, open_directory
+from utils.helpers import is_supported_url, open_file_in_explorer, play_media_file, open_directory
 from utils.history_manager import HistoryManager
 
 
@@ -78,7 +78,7 @@ class ModernDownloaderApp(ctk.CTk):
 
         subtitle_lbl = ctk.CTkLabel(
             title_box,
-            text="YouTube 4K, 8K, HDR ve Klip Kesme (Time-Range) Destekli Video İndirici",
+            text="YouTube ve 1000+ site için 4K, 8K, HDR ve Klip Kesme Destekli Video İndirici",
             font=FONT_SMALL,
             text_color=COLOR_TEXT_MUTED
         )
@@ -226,7 +226,7 @@ class ModernDownloaderApp(ctk.CTk):
 
         self.url_entry = ctk.CTkEntry(
             self.url_card,
-            placeholder_text="YouTube video bağlantısını buraya yapıştırın (örn: https://www.youtube.com/watch?v=...)",
+            placeholder_text="Video bağlantısını buraya yapıştırın (YouTube, Vimeo, X, Instagram, doğrudan .mp4/.m3u8...)",
             font=FONT_BODY,
             fg_color=COLOR_BG_INPUT,
             border_color=COLOR_BORDER,
@@ -327,7 +327,7 @@ class ModernDownloaderApp(ctk.CTk):
             if clipboard_text:
                 self.url_entry.delete(0, "end")
                 self.url_entry.insert(0, clipboard_text)
-                if is_valid_youtube_url(clipboard_text):
+                if is_supported_url(clipboard_text):
                     self.start_analysis()
         except Exception:
             pass
@@ -335,11 +335,11 @@ class ModernDownloaderApp(ctk.CTk):
     def start_analysis(self) -> None:
         url = self.url_entry.get().strip()
         if not url:
-            messagebox.showwarning("Uyarı", "Lütfen bir YouTube video bağlantısı girin.")
+            messagebox.showwarning("Uyarı", "Lütfen bir video bağlantısı girin.")
             return
 
-        if not is_valid_youtube_url(url):
-            messagebox.showerror("Geçersiz URL", "Girilen bağlantı geçerli bir YouTube video adresi değil.")
+        if not is_supported_url(url):
+            messagebox.showerror("Geçersiz URL", "Girilen metin geçerli bir web adresi değil (http:// veya https:// ile başlamalı).")
             return
 
         if self.is_analyzing:
@@ -371,8 +371,8 @@ class ModernDownloaderApp(ctk.CTk):
 
     def _run_analysis_worker(self, url: str) -> None:
         try:
-            data = YouTubeAnalyzer.analyze_url(url)
-            thumb_img = YouTubeAnalyzer.fetch_thumbnail_image(data.get("thumbnail_url"))
+            data = VideoAnalyzer.analyze_url(url)
+            thumb_img = VideoAnalyzer.fetch_thumbnail_image(data.get("thumbnail_url"))
             self.after(0, lambda: self._on_analysis_success(data, thumb_img))
         except Exception as e:
             self.after(0, lambda: self._on_analysis_error(str(e)))

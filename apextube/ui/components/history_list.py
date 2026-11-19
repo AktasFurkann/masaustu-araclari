@@ -51,7 +51,7 @@ class HistoryListView(ctk.CTkScrollableFrame):
 
             hint_lbl = ctk.CTkLabel(
                 empty_frame,
-                text="Yukarıdan bir YouTube bağlantısı yapıştırıp indirmeye başlayabilirsiniz.",
+                text="Yukarıdan bir video bağlantısı yapıştırıp indirmeye başlayabilirsiniz.",
                 font=FONT_BODY,
                 text_color=COLOR_TEXT_MUTED
             )

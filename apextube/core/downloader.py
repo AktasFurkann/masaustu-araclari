@@ -15,7 +15,7 @@ import yt_dlp
 from yt_dlp.downloader import external as _yt_external
 from yt_dlp.utils import download_range_func
 
-from utils.helpers import format_bytes, format_speed, format_seconds, sanitize_filename, clean_playlist_params
+from utils.helpers import first_entry, friendly_error, format_bytes, format_speed, format_seconds, sanitize_filename, clean_playlist_params
 from core.ffmpeg_checker import FFmpegChecker
 
 
@@ -302,18 +302,18 @@ class VideoDownloader:
         last_err: Optional[Exception] = None
         for attempt in range(2):
             if attempt > 0:
-                self._notify_retry("YouTube erişimi reddetti, tekrar deneniyor...")
+                self._notify_retry("Site erişimi reddetti, tekrar deneniyor...")
                 self._downloaded_file_path = None
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    return ydl.extract_info(self.url, download=True)
+                    return first_entry(ydl.extract_info(self.url, download=True))
             except Exception as err:
                 if self._is_cancelled or not self._is_forbidden_error(err):
                     raise
                 last_err = err
 
         raise RuntimeError(
-            "YouTube indirme isteğini reddetti (HTTP 403).\n"
+            "Site indirme isteğini reddetti (HTTP 403).\n"
             "Genellikle yt-dlp sürümü eskidiğinde olur; programın güncel sürümüyle tekrar deneyin.\n\n"
             f"Detay: {last_err}"
         )
@@ -361,7 +361,7 @@ class VideoDownloader:
         if self.on_progress:
             self.on_progress({
                 'percent': 100.0,
-                'status_text': "H.264'e dönüştürülüyor (bu kalitede YouTube H.264 sunmuyor)...",
+                'status_text': "H.264'e dönüştürülüyor (kaynak bu kalitede H.264 sunmuyor)...",
                 'is_muxing': True
             })
 
@@ -431,6 +431,7 @@ class VideoDownloader:
                 'progress_hooks': [self._progress_hook],
                 'postprocessor_hooks': [self._postprocessor_hook],
                 'noplaylist': True,
+                'playlist_items': '1',
                 'fixup': 'warn',
                 'socket_timeout': 30,
                 'retries': 3,
@@ -520,7 +521,7 @@ class VideoDownloader:
                 if self.on_cancel:
                     self.on_cancel()
             else:
-                error_msg = str(e)
+                error_msg = friendly_error(e)
                 if self.on_error:
                     self.on_error(error_msg)
         finally:

@@ -1,5 +1,5 @@
 """
-ApexTube 8K Video Downloader - YouTube Video Analiz Modülü
+ApexTube 8K Video Downloader - Video Analiz Modülü
 """
 import copy
 import io
@@ -9,21 +9,22 @@ from PIL import Image
 import yt_dlp
 
 from config import OUTPUT_FORMATS
-from utils.helpers import is_valid_youtube_url, format_seconds, format_bytes, clean_playlist_params
+from utils.helpers import is_supported_url, first_entry, friendly_error, format_seconds, format_bytes, clean_playlist_params
 from core.ffmpeg_checker import FFmpegChecker
 from core.downloader import build_format_selection, H264_FORMAT_SORT
 
 
-class YouTubeAnalyzer:
-    """YouTube URL'sini analiz ederek başlık, küçük resim, süre ve çözünürlükleri çıkarır."""
+class VideoAnalyzer:
+    """Video URL'sini analiz ederek başlık, küçük resim, süre ve çözünürlükleri çıkarır."""
 
     @classmethod
     def analyze_url(cls, url: str) -> Dict[str, Any]:
         """
-        YouTube videosunu indirmeden analiz eder ve 4K/8K dahil tüm mevcut çözünürlükleri çıkarır.
+        Videoyu indirmeden analiz eder ve 4K/8K dahil tüm mevcut çözünürlükleri çıkarır.
+        YouTube dışında yt-dlp'nin desteklediği siteler ve doğrudan video bağlantıları da çalışır.
         """
-        if not is_valid_youtube_url(url):
-            raise ValueError("Geçersiz YouTube URL'si! Lütfen geçerli bir video bağlantısı girin.")
+        if not is_supported_url(url):
+            raise ValueError("Geçersiz bağlantı! Lütfen http(s) ile başlayan bir video adresi girin.")
 
         # Playlist parametrelerini temizle - sadece tek video analiz edilsin
         clean_url = clean_playlist_params(url)
@@ -35,23 +36,25 @@ class YouTubeAnalyzer:
             'no_warnings': True,
             'skip_download': True,
             'extract_flat': False,
-            'noplaylist': True  # Playlist'ten sadece tek videoyu al
+            'noplaylist': True,  # Playlist'ten sadece tek videoyu al
+            'playlist_items': '1',  # Birden çok video içeren sayfalarda yalnızca ilki
         }
         if ffmpeg_path:
             ydl_opts['ffmpeg_location'] = ffmpeg_path
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
-                info = ydl.extract_info(clean_url, download=False)
+                info = first_entry(ydl.extract_info(clean_url, download=False))
             except Exception as e:
-                raise RuntimeError(f"Video bilgileri alınırken hata oluştu: {str(e)}")
+                raise RuntimeError(f"Video bilgileri alınırken hata oluştu: {friendly_error(e)}")
 
         if not info:
             raise RuntimeError("Video bilgileri okunamadı.")
 
         # Temel Video Bilgileri
         title = info.get('title', 'Bilinmeyen Video')
-        channel = info.get('uploader') or info.get('channel', 'Bilinmeyen Kanal')
+        channel = (info.get('uploader') or info.get('channel')
+                   or info.get('webpage_url_domain') or 'Bilinmeyen Kaynak')
         duration_sec = info.get('duration') or 0
         duration_str = format_seconds(duration_sec)
         view_count = info.get('view_count', 0)
@@ -162,7 +165,7 @@ class YouTubeAnalyzer:
     def _estimate_sizes(ydl: yt_dlp.YoutubeDL, info: Dict[str, Any], resolutions: List[str]) -> Dict[tuple, Dict[str, Any]]:
         """
         Her (kalite, format) seçimi için indirmede seçilecek akışları yt-dlp'nin kendi
-        seçicisiyle belirler ve YouTube'un bildirdiği akış boyutlarını toplar.
+        seçicisiyle belirler ve sitenin bildirdiği akış boyutlarını toplar.
         """
         formats = info.get('formats') or []
         duration = info.get('duration') or 0
