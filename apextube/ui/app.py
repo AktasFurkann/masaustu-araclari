@@ -11,24 +11,29 @@ import customtkinter as ctk
 
 from config import (
     APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT,
-    MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, DEFAULT_DOWNLOAD_DIR, ANALYSIS_TIMEOUT_SEC
+    MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, DEFAULT_DOWNLOAD_DIR, ANALYSIS_TIMEOUT_SEC,
+    BEST_QUALITY_LABEL, OUTPUT_FORMATS
 )
 from ui.styles import (
     COLOR_BG_MAIN, COLOR_BG_CARD, COLOR_BG_INPUT, COLOR_BORDER,
     COLOR_ACCENT, COLOR_ACCENT_HOVER, COLOR_SUCCESS, COLOR_DANGER,
     COLOR_WARNING, COLOR_PURPLE, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY,
     COLOR_TEXT_MUTED, FONT_TITLE, FONT_SUBTITLE, FONT_SECTION, FONT_BODY,
-    FONT_BODY_BOLD, FONT_SMALL, FONT_BADGE
+    FONT_BODY_BOLD, FONT_SMALL, FONT_BADGE, FONT_MONO
 )
 from ui.components.video_card import VideoInfoCard
 from ui.components.progress_widget import ProgressWidget
 from ui.components.history_list import HistoryListView
 from core.analyzer import VideoAnalyzer
 from core.downloader import VideoDownloader
+from core.hls_downloader import HlsDownloader, is_hls_url
 from core.ffmpeg_checker import FFmpegChecker
 from core import updater
 from core.bridge import LinkBridge, install_extension_files
-from utils.helpers import is_supported_url, open_file_in_explorer, play_media_file, open_directory
+from utils.helpers import (
+    is_supported_url, open_file_in_explorer, play_media_file, open_directory,
+    parse_http_headers, merge_http_headers
+)
 from utils.history_manager import HistoryManager
 
 
@@ -345,6 +350,99 @@ class ModernDownloaderApp(ctk.CTk):
         )
         self.analyze_btn.grid(row=0, column=2, padx=(0, 16), pady=12)
 
+        self._build_headers_section()
+
+    def _build_headers_section(self) -> None:
+        """Bazı sunucuların istediği Referer / Cookie / User-Agent gibi başlıklar için açılır bölüm.
+        Girilenler yalnızca bellekte tutulur; ayarlara veya geçmişe yazılmaz."""
+        self.headers_expanded = False
+
+        self.headers_toggle_btn = ctk.CTkButton(
+            self.url_card,
+            text="",
+            font=FONT_SMALL,
+            fg_color="transparent",
+            hover_color=COLOR_BORDER,
+            text_color=COLOR_TEXT_SECONDARY,
+            anchor="w",
+            height=24,
+            command=self._toggle_headers_section
+        )
+        self.headers_toggle_btn.grid(row=1, column=0, columnspan=3, padx=12, pady=(0, 8), sticky="w")
+
+        self.headers_frame = ctk.CTkFrame(self.url_card, fg_color="transparent")
+        self.headers_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self.headers_frame,
+            text=("Her satıra bir başlık yazın:  Ad: Değer     (ör.  Referer: https://site.com/izle/1   "
+                  "Cookie: oturum=abc)\nEklentiden gelen aynı adlı başlıkların yerine geçer. "
+                  "Hiçbir yere kaydedilmez; program kapanınca silinir."),
+            font=FONT_SMALL,
+            text_color=COLOR_TEXT_MUTED,
+            justify="left",
+            anchor="w"
+        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
+
+        ctk.CTkButton(
+            self.headers_frame,
+            text="Temizle",
+            font=FONT_SMALL,
+            fg_color="transparent",
+            hover_color=COLOR_BORDER,
+            text_color=COLOR_TEXT_SECONDARY,
+            border_width=1,
+            border_color=COLOR_BORDER,
+            width=70,
+            height=24,
+            command=self._clear_custom_headers
+        ).grid(row=0, column=1, sticky="ne", padx=(8, 0))
+
+        self.headers_textbox = ctk.CTkTextbox(
+            self.headers_frame,
+            height=84,
+            font=(FONT_MONO, 11),
+            fg_color=COLOR_BG_INPUT,
+            border_color=COLOR_BORDER,
+            border_width=1,
+            text_color=COLOR_TEXT_PRIMARY,
+            wrap="none"
+        )
+        self.headers_textbox.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.headers_textbox.bind("<KeyRelease>", lambda event: self._refresh_headers_toggle())
+
+        self._refresh_headers_toggle()
+
+    def _toggle_headers_section(self, expand: Optional[bool] = None) -> None:
+        self.headers_expanded = (not self.headers_expanded) if expand is None else expand
+        if self.headers_expanded:
+            self.headers_frame.grid(row=2, column=0, columnspan=3, padx=16, pady=(0, 12), sticky="ew")
+            self.headers_textbox.focus_set()
+        else:
+            self.headers_frame.grid_remove()
+        self._refresh_headers_toggle()
+
+    def _clear_custom_headers(self) -> None:
+        self.headers_textbox.delete("1.0", "end")
+        self._refresh_headers_toggle()
+
+    def _custom_headers(self) -> dict:
+        """Kutudaki başlıkları döndürür; hatalı satır varsa ValueError atar."""
+        return parse_http_headers(self.headers_textbox.get("1.0", "end"))
+
+    def _refresh_headers_toggle(self) -> None:
+        arrow = "▾" if self.headers_expanded else "▸"
+        try:
+            count = len(self._custom_headers())
+            summary = f"  •  {count} başlık" if count else ""
+            color = COLOR_ACCENT if count else COLOR_TEXT_SECONDARY
+        except ValueError:
+            summary, color = "  •  ⚠ hatalı satır var", COLOR_WARNING
+        self.headers_toggle_btn.configure(
+            text=f"{arrow}  Özel HTTP başlıkları (Referer, Cookie, User-Agent...){summary}",
+            text_color=color
+        )
+
     def _build_content_area(self) -> None:
         self.content_container = ctk.CTkFrame(self, fg_color="transparent")
         self.content_container.pack(fill="x", padx=24, pady=(0, 16))
@@ -426,6 +524,13 @@ class ModernDownloaderApp(ctk.CTk):
         if self.is_analyzing:
             return
 
+        try:
+            custom_headers = self._custom_headers()
+        except ValueError as err:
+            self._toggle_headers_section(expand=True)
+            messagebox.showerror("Geçersiz Başlık", f"Özel HTTP başlıkları okunamadı:\n\n{err}")
+            return
+
         self.is_analyzing = True
         # Her analizin bir kimliği var: iptal edilen ya da süresi dolan analizin sonucu sonradan gelirse yok sayılır.
         self.analysis_id += 1
@@ -470,7 +575,10 @@ class ModernDownloaderApp(ctk.CTk):
         cancel_btn.pack(pady=(10, 22))
 
         link = self.extension_link if self.extension_link and self.extension_link["url"] == url else {}
-        threading.Thread(target=self._run_analysis_worker, args=(url, link, analysis_id), daemon=True).start()
+        headers = merge_http_headers(link.get("http_headers"), custom_headers)
+        threading.Thread(
+            target=self._run_analysis_worker, args=(url, link, headers, analysis_id), daemon=True
+        ).start()
         self._tick_analysis(analysis_id, elapsed_lbl, 0)
 
     def _tick_analysis(self, analysis_id: int, label, seconds: int) -> None:
@@ -495,9 +603,9 @@ class ModernDownloaderApp(ctk.CTk):
         self.paste_btn.configure(state="normal")
         self._show_welcome_view()
 
-    def _run_analysis_worker(self, url: str, link: dict, analysis_id: int) -> None:
+    def _run_analysis_worker(self, url: str, link: dict, headers: dict, analysis_id: int) -> None:
         try:
-            data = VideoAnalyzer.analyze_url(url, link.get("http_headers"), link.get("title"))
+            data = VideoAnalyzer.analyze_url(url, headers, link.get("title"))
             thumb_img = VideoAnalyzer.fetch_thumbnail_image(data.get("thumbnail_url"))
             self.after(0, lambda: self._on_analysis_success(data, thumb_img, analysis_id))
         except Exception as e:
@@ -562,6 +670,29 @@ class ModernDownloaderApp(ctk.CTk):
         self.progress_widget.pack(fill="x", pady=4)
 
         target_dir = os.path.abspath(download_folder)
+        callbacks = dict(
+            on_progress=lambda data: self.after(0, lambda: self.progress_widget.update_progress(data)),
+            on_complete=lambda data: self.after(0, lambda: self._on_download_complete(data)),
+            on_error=lambda err: self.after(0, lambda: self._on_download_error(err)),
+            on_cancel=lambda: self.after(0, self._on_download_cancelled),
+        )
+
+        if self._use_hls_downloader(url, resolution_label, output_format, time_range):
+            data = self.analyzed_video_data
+            self.current_downloader = HlsDownloader(
+                url=url,
+                download_dir=target_dir,
+                title=data.get("custom_title") or data.get("title") or "Video",
+                http_headers=data.get("http_headers"),
+                result_info={
+                    'resolution': resolution_label,
+                    'duration': data.get("duration_str"),
+                    'thumbnail_url': data.get("thumbnail_url"),
+                },
+                **callbacks,
+            )
+            self.current_downloader.start()
+            return
 
         self.current_downloader = VideoDownloader(
             url=url,
@@ -571,12 +702,27 @@ class ModernDownloaderApp(ctk.CTk):
             time_range=time_range,
             http_headers=self.analyzed_video_data.get("http_headers"),
             custom_title=self.analyzed_video_data.get("custom_title"),
-            on_progress=lambda data: self.after(0, lambda: self.progress_widget.update_progress(data)),
-            on_complete=lambda data: self.after(0, lambda: self._on_download_complete(data)),
-            on_error=lambda err: self.after(0, lambda: self._on_download_error(err)),
-            on_cancel=lambda: self.after(0, self._on_download_cancelled)
+            **callbacks,
         )
         self.current_downloader.start()
+
+    @staticmethod
+    def _use_hls_downloader(
+        url: str,
+        resolution_label: str,
+        output_format: str,
+        time_range: Optional[Tuple[float, float]],
+    ) -> bool:
+        """
+        Doğrudan .m3u8 bağlantısı, en yüksek kalite ve orijinal MP4 seçildiyse akış FFmpeg ile
+        doğrudan indirilir. Kalite seçimi, MP3/MKV/H.264 dönüşümü ve klip yt-dlp yolunda kalır.
+        """
+        return (
+            is_hls_url(url)
+            and time_range is None
+            and resolution_label == BEST_QUALITY_LABEL
+            and output_format == OUTPUT_FORMATS[0]
+        )
 
     def cancel_download(self) -> None:
         if self.current_downloader and self.current_downloader.is_alive():

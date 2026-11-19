@@ -17,6 +17,15 @@ Videonun bir oynatıcıya gömülü olduğu ve sayfa bağlantısının tek baş�
 
 **Kurulum:** ApexTube'da başlıktaki **🧩 Tarayıcı Eklentisi** düğmesine basın. Eklenti dosyaları `%APPDATA%\ApexTube\browser_extension` klasörüne çıkarılır; ardından `chrome://extensions` → **Geliştirici modu** → **Paketlenmemiş öğe yükle** ile bu klasörü seçin. Program güncellenince klasör de güncellenir; eklentiler sayfasında **Yeniden yükle** demeniz yeterlidir.
 
+### 🔑 Özel HTTP Başlıkları ve HLS İndirme
+
+Bazı sunucular akışı yalnızca belirli `Referer`, `User-Agent` veya `Cookie` ile istendiğinde verir:
+
+- Bağlantı alanının altındaki **Özel HTTP başlıkları** bölümüne her satıra bir `Ad: Değer` yazılır. Başlıklar hem analizde hem indirmede kullanılır; eklentiden gelen aynı adlı başlıkların yerine geçer. Hiçbir yere kaydedilmez, program kapanınca silinir.
+- Doğrudan `.m3u8` bağlantısında **En Yüksek Kalite** + **MP4 (Orijinal)** seçilirse akış `core/hls_downloader.py` ile FFmpeg'e doğrudan indirilir (yeniden kodlama yok); başlıklar tüm parça isteklerine de uygulanır. Kalite seçimi, MKV/MP3/H.264 ve klip yt-dlp ile yapılır.
+- Doğrudan akışlarda video adı, eklentiden sayfa başlığı gelmezse `Referer` sayfasının başlığından (`og:title` / `<title>`) ya da adres yolundan türetilir. Çerez, yalnızca sayfa akışla aynı sunucudaysa o sayfaya gönderilir.
+- Komut satırından: `python -m core.hls_downloader URL cikti.mp4 -H "Referer: ..." -H "Cookie: ..."`
+
 ---
 
 ## 🏗️ 1. Mimari Tasarım ve Çalışma Prensibi
@@ -51,6 +60,7 @@ mp4donusturucu/
 │   ├── __init__.py
 │   ├── analyzer.py             # Video meta veri ve çözünürlük analizcisi
 │   ├── downloader.py           # yt-dlp & FFmpeg çok iş parçacıklı indirme motoru
+│   ├── hls_downloader.py       # Özel başlıklarla .m3u8 akışını FFmpeg ile MP4'e indirme
 │   └── ffmpeg_checker.py       # FFmpeg algılama, doğrulama ve yönlendirme
 │
 ├── ui/

@@ -142,9 +142,12 @@ class ProgressWidget(ctk.CTkFrame):
     def update_progress(self, data: Dict[str, Any]) -> None:
         """Gelen indirme verileriyle arayüzü anlık günceller."""
         percent = data.get("percent", 0.0)
-        self.progress_bar.set(max(0.0, min(1.0, percent / 100.0)))
-
-        self.percent_label.configure(text=f"%{percent:.1f}")
+        if percent is None:
+            # Toplam süre bilinmiyor (ör. canlı HLS yayını): çubuk olduğu yerde kalır.
+            self.percent_label.configure(text="%--")
+        else:
+            self.progress_bar.set(max(0.0, min(1.0, percent / 100.0)))
+            self.percent_label.configure(text=f"%{percent:.1f}")
 
         # Durum Metni
         status_text = data.get("status_text", "İndiriliyor...")

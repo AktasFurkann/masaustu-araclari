@@ -6,7 +6,7 @@ import re
 import sys
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Mapping, Optional, Union
 from urllib.parse import urlparse
 
 # YouTube URL Doğrulama Deseni (Standart, Kısaltılmış youtu.be, Shorts, Canlı Yayınlar ve Playlist Parametreleri)
@@ -43,6 +43,64 @@ def is_supported_url(url: str) -> bool:
         return False
     parsed = urlparse(url.strip())
     return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
+
+
+# RFC 7230 "token": başlık adında boşluk, iki nokta veya kontrol karakteri olamaz.
+_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+
+
+def validate_http_header(name: str, value: str) -> None:
+    """
+    Başlık adı ve değerini denetler; geçersizse ValueError atar.
+    Değerde satır sonu olursa, değer araya kendi başlık satırını sokabilirdi.
+    """
+    if not _HEADER_NAME_RE.match(name):
+        raise ValueError(f"Geçersiz HTTP başlık adı: {name!r}")
+    if any(ch in value for ch in "\r\n\0"):
+        raise ValueError(f"'{name}' başlığının değeri satır sonu içeremez.")
+
+
+def parse_http_headers(text: str) -> Dict[str, str]:
+    """
+    Her satırı "Ad: Değer" olan metni sözlüğe çevirir. Boş satırlar ve # ile başlayanlar atlanır.
+    Aynı başlık birden çok kez yazılırsa sonuncusu geçerlidir. Hatalı satırda ValueError atar.
+    """
+    headers: Dict[str, str] = {}
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        name, sep, value = line.partition(':')
+        name, value = name.strip(), value.strip()
+        # "Referer https://..." gibi iki noktası unutulmuş satırda ad kısmı boşluk içerir
+        if not sep or not name or ' ' in name:
+            raise ValueError(f"{line_no}. satır 'Ad: Değer' biçiminde değil: {line[:60]!r}")
+        try:
+            validate_http_header(name, value)
+        except ValueError as err:
+            raise ValueError(f"{line_no}. satır: {err}") from None
+        if value:
+            # Büyük/küçük harf farkıyla iki kez yazılmış başlık tek kalsın
+            for existing in [k for k in headers if k.lower() == name.lower()]:
+                del headers[existing]
+            headers[name] = value
+    return headers
+
+
+def get_header(headers: Optional[Mapping[str, str]], name: str) -> Optional[str]:
+    """Başlığı büyük/küçük harf duyarsız arar (kullanıcı 'referer:' diye yazmış olabilir)."""
+    for key, value in (headers or {}).items():
+        if key.lower() == name.lower():
+            return value
+    return None
+
+
+def merge_http_headers(base: Optional[Dict[str, str]], override: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """override'daki başlıklar, base'deki aynı adlı başlıkların (büyük/küçük harf duyarsız) yerini alır."""
+    merged = {k: v for k, v in (base or {}).items()
+              if k.lower() not in {o.lower() for o in (override or {})}}
+    merged.update(override or {})
+    return merged
 
 
 def is_valid_youtube_url(url: str) -> bool:

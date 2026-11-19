@@ -44,6 +44,9 @@ ANALYSIS_TIMEOUT_SEC = 60
 # Varsayılan İndirme Klasörü
 DEFAULT_DOWNLOAD_DIR = str(Path.home() / "Downloads")
 
+# Analizde her zaman ilk sırada sunulan kalite seçeneği
+BEST_QUALITY_LABEL = "En Yüksek Kalite (Otomatik 4K/8K)"
+
 # İlk eleman varsayılandır. Duvar kağıdı uygulaması LibVLC'ye geçtiği için AV1'i oynatabiliyor.
 OUTPUT_FORMATS = [
     "MP4 (Orijinal AV1 / VP9 - Küçük Boyut, Önerilen)",

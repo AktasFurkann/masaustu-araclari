@@ -2,15 +2,20 @@
 ApexTube 8K Video Downloader - Video Analiz Modülü
 """
 import copy
+import html
 import io
+import re
 import requests
-from urllib.parse import urlparse
-from typing import Dict, Any, List, Optional
+from urllib.parse import unquote, urlparse
+from typing import Dict, Any, List, Mapping, Optional
 from PIL import Image
 import yt_dlp
 
-from config import OUTPUT_FORMATS
-from utils.helpers import is_supported_url, first_entry, friendly_error, format_seconds, format_bytes, clean_playlist_params
+from config import BEST_QUALITY_LABEL, OUTPUT_FORMATS
+from utils.helpers import (
+    is_supported_url, first_entry, friendly_error, format_seconds, format_bytes, clean_playlist_params,
+    get_header
+)
 from core.ffmpeg_checker import FFmpegChecker
 from core.downloader import build_format_selection, H264_FORMAT_SORT
 
@@ -70,9 +75,13 @@ class VideoAnalyzer:
         # Doğrudan akış bağlantısı (yt-dlp'nin genel ayrıştırıcısı): sayfa adı ve sitesi daha anlamlı
         custom_title = None
         if info.get('extractor_key') == 'Generic':
-            if title_hint:
-                title = custom_title = title_hint
-            referer_host = urlparse((http_headers or {}).get('Referer', '')).netloc
+            referer = get_header(http_headers, 'Referer') or ''
+            # Öncelik eklentinin bildirdiği sayfa başlığında; yoksa Referer sayfasından türetilir.
+            custom_title = title_hint or (page_title_from_referer(referer, clean_url, http_headers)
+                                          if referer else None)
+            if custom_title:
+                title = custom_title
+            referer_host = urlparse(referer).netloc
             if referer_host:
                 channel = referer_host
         duration_sec = info.get('duration') or 0
@@ -112,7 +121,7 @@ class VideoAnalyzer:
                         height_map[height]['hdr'] = True
 
         # Kullanıcıya sunulacak çözünürlük seçeneklerini filtrele ve oluştur
-        resolutions_list = ["En Yüksek Kalite (Otomatik 4K/8K)"]
+        resolutions_list = [BEST_QUALITY_LABEL]
 
         # Çözünürlük kademeleri ve etiketleme
         resolution_targets = [
@@ -285,3 +294,101 @@ def estimate_output_bytes(entry: Dict[str, Any], duration_sec: float,
     elif entry.get('reencode'):
         size *= _factor_for(height, _H264_FACTORS)
     return size
+
+
+# --- Doğrudan akışlarda Referer sayfasından video adı ---
+
+_PAGE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+_PAGE_READ_LIMIT = 512 * 1024  # başlık etiketleri sayfanın başında olur; tamamını indirmeye gerek yok
+_PAGE_TIMEOUT_SEC = 8
+_TITLE_META_KEYS = ('og:title', 'twitter:title')
+_META_TAG_RE = re.compile(r'<meta\b[^>]*>', re.IGNORECASE)
+_ATTR_RE = re.compile(r'([\w:-]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))')
+_TITLE_TAG_RE = re.compile(r'<title[^>]*>(.*?)</title>', re.IGNORECASE | re.DOTALL)
+_CHARSET_RE = re.compile(rb'<meta[^>]+charset=["\']?([\w-]+)', re.IGNORECASE)
+# Adres yolunda video adı taşımayan, sık görülen kısımlar
+_GENERIC_SEGMENTS = {'izle', 'watch', 'video', 'videos', 'embed', 'player', 'play', 'v', 'e',
+                     'index', 'view', 'film', 'dizi', 'bolum', 'episode', 'stream', 'live'}
+
+
+def page_title_from_referer(referer: str, stream_url: str,
+                            http_headers: Optional[Mapping[str, str]] = None) -> Optional[str]:
+    """
+    Videonun oynatıldığı sayfanın başlığını döndürür (og:title > twitter:title > <title>).
+    Sayfa açılamaz veya başlık bulunamazsa adres yolundan bir ad türetir; o da olmazsa None.
+
+    Cookie yalnızca sayfa, akışla aynı sunucudaysa gönderilir: kullanıcının yazdığı çerez genelde
+    video sunucusuna aittir ve başka bir siteye iletilmemelidir.
+    """
+    if not is_supported_url(referer):
+        return None
+    return _fetch_page_title(referer, stream_url, http_headers) or _title_from_url_path(referer)
+
+
+def _fetch_page_title(referer: str, stream_url: str,
+                      http_headers: Optional[Mapping[str, str]]) -> Optional[str]:
+    headers = {'User-Agent': get_header(http_headers, 'User-Agent') or _PAGE_UA}
+    cookie = get_header(http_headers, 'Cookie')
+    if cookie and urlparse(referer).hostname == urlparse(stream_url).hostname:
+        headers['Cookie'] = cookie
+
+    try:
+        with requests.get(referer, headers=headers, timeout=_PAGE_TIMEOUT_SEC, stream=True) as resp:
+            if resp.status_code != 200 or 'html' not in resp.headers.get('Content-Type', '').lower():
+                return None
+            body = b''
+            for chunk in resp.iter_content(16 * 1024):
+                body += chunk
+                if len(body) >= _PAGE_READ_LIMIT:
+                    break
+            # requests, charset bildirilmemiş metinde ISO-8859-1 varsayar; Türkçe harfler bozulmasın diye
+            # yalnızca açıkça bildirilen kodlama kullanılır, yoksa sayfadaki <meta charset> veya UTF-8.
+            declared = 'charset=' in resp.headers.get('Content-Type', '').lower()
+            encoding = resp.encoding if declared else None
+    except requests.RequestException:
+        return None
+
+    if not encoding:
+        match = _CHARSET_RE.search(body[:4096])
+        encoding = match.group(1).decode('ascii', 'ignore') if match else 'utf-8'
+    try:
+        text = body.decode(encoding, errors='replace')
+    except LookupError:
+        text = body.decode('utf-8', errors='replace')
+
+    return _extract_title(text)
+
+
+def _extract_title(page_html: str) -> Optional[str]:
+    meta_titles: Dict[str, str] = {}
+    for tag in _META_TAG_RE.findall(page_html):
+        attrs = {m.group(1).lower(): next(g for g in m.groups()[1:] if g is not None)
+                 for m in _ATTR_RE.finditer(tag)}
+        key = (attrs.get('property') or attrs.get('name') or '').lower()
+        if key in _TITLE_META_KEYS and attrs.get('content'):
+            meta_titles.setdefault(key, attrs['content'])
+
+    candidates = [meta_titles.get(k) for k in _TITLE_META_KEYS]
+    title_tag = _TITLE_TAG_RE.search(page_html)
+    candidates.append(title_tag.group(1) if title_tag else None)
+
+    for raw in candidates:
+        if raw:
+            title = ' '.join(html.unescape(raw).split())[:200]
+            if title:
+                return title
+    return None
+
+
+def _title_from_url_path(url: str) -> Optional[str]:
+    """/izle/harika-film-2024/123 -> 'harika film 2024'. Anlamlı kısım yoksa None."""
+    segments = [unquote(s) for s in urlparse(url).path.split('/') if s]
+    for segment in reversed(segments):
+        segment = re.sub(r'\.(html?|php|aspx?|jsp)$', '', segment, flags=re.IGNORECASE)
+        words = ' '.join(re.split(r'[-_+.]+', segment)).strip()
+        looks_like_id = ' ' not in words and any(ch.isdigit() for ch in words)  # ör. dQw4w9WgXcQ
+        if (len(words) < 3 or looks_like_id or words.lower() in _GENERIC_SEGMENTS
+                or not any(ch.isalpha() for ch in words)):
+            continue
+        return words[:200]
+    return None
