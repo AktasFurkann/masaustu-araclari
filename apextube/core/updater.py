@@ -62,4 +62,12 @@ def run_installer(path: str) -> None:
     """Kurulumu sessiz modda başlatır. Kurulum, açık programları kapatıp günceller ve yeniden açar."""
     flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
     subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RESTART=apextube"],
-                     creationflags=flags, close_fds=True)
+                     creationflags=flags, close_fds=True, env=_clean_environment())
+
+
+def _clean_environment() -> Dict[str, str]:
+    """PyInstaller'ın tek dosya modunda bıraktığı değişkenler kurulumdan yeni sürüme geçerse, yeni sürüm
+    kendini bu sürecin alt süreci sanıp silinmiş _MEI klasöründen python DLL'ini yüklemeye çalışır."""
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("_PYI_", "_MEI"))}
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return env
