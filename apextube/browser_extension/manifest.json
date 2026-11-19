@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ApexTube Video Yakalayıcı",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sayfada oynatılan video akışlarını (HLS, DASH, MP4) bulur ve ApexTube ile indirir.",
   "permissions": ["webRequest", "storage", "tabs"],
   "host_permissions": ["<all_urls>"],

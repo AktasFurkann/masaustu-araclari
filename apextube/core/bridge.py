@@ -89,7 +89,10 @@ class LinkBridge:
                 return (self.headers.get("Origin") or "").startswith(_EXTENSION_ORIGINS)
 
             def do_GET(self) -> None:
-                if self.path != "/ping" or not self._from_extension():
+                # Chrome, eklentinin GET isteklerine Origin eklemiyor; ping yalnızca sürümü bildirdiği
+                # için Origin'siz isteğe de cevap verilir, web sayfası kökenli olanlar yine reddedilir.
+                origin = self.headers.get("Origin")
+                if self.path != "/ping" or (origin and not self._from_extension()):
                     self._reply(403, {"ok": False})
                     return
                 self._reply(200, {"ok": True, "app": "ApexTube", "version": APP_VERSION})

@@ -47,7 +47,8 @@ async function checkApexTube() {
   const status = document.getElementById("status");
   try {
     const res = await fetchWithTimeout(`${APEXTUBE}/ping`);
-    const data = await res.json();
+    const data = res.ok ? await res.json() : {};
+    if (!data.ok) throw new Error(`HTTP ${res.status}`);
     dot.className = "dot on";
     status.textContent = `ApexTube v${data.version} bağlı`;
   } catch {
@@ -71,8 +72,12 @@ async function sendToApexTube(item, tab, button) {
         page_url: tab.url,
       }),
     }, 3000);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    toast("ApexTube'a gönderildi. Kaliteyi seçip indirmeyi başlatabilirsin.", "ok");
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      toast("ApexTube'a gönderildi. Kaliteyi seçip indirmeyi başlatabilirsin.", "ok");
+    } else {
+      toast(`ApexTube bağlantıyı kabul etmedi: ${data.error || `HTTP ${res.status}`}`, "err");
+    }
   } catch {
     toast("ApexTube'a ulaşılamadı. Programı açıp tekrar dene.", "err");
   } finally {
@@ -89,7 +94,15 @@ function renderEmpty() {
     </div>`;
 }
 
-function renderItem(item, tab) {
+// "index.m3u8", "nl.php", "video?id=..." gibi adlar videoyu tanıtmaz; bunlarda sekme başlığı gösterilir.
+const MEDIA_FILE = /\.(m3u8|mpd|mp4|webm|m4v|mov|mkv)$/i;
+const GENERIC_NAMES = /^(index|master|playlist|manifest|chunklist|media|video|stream|main|prog_index)(_[\w-]+)?\./i;
+
+function meaningfulFile(file) {
+  return MEDIA_FILE.test(file) && !GENERIC_NAMES.test(file) ? file : "";
+}
+
+function renderItem(item, tab, number) {
   const { file, host } = displayName(item.url);
   const el = document.createElement("div");
   el.className = "item";
@@ -103,9 +116,11 @@ function renderItem(item, tab) {
   const kind = el.querySelector(".kind");
   kind.textContent = item.kind;
   kind.classList.add(item.kind);
-  el.querySelector(".name").textContent = file;
-  el.querySelector(".name").title = item.url;
-  el.querySelector(".meta").textContent = [host, formatSize(item.size)].filter(Boolean).join(" • ");
+  const name = meaningfulFile(file) || tab.title || file;
+  el.querySelector(".name").textContent = name;
+  el.querySelector(".name").title = `${name}\n${item.url}`;
+  el.querySelector(".meta").textContent =
+    [`#${number}`, host, name === file ? "" : meaningfulFile(file), formatSize(item.size)].filter(Boolean).join(" • ");
 
   const sendBtn = el.querySelector(".primary");
   sendBtn.addEventListener("click", () => sendToApexTube(item, tab, sendBtn));
@@ -129,7 +144,16 @@ async function init() {
   // Çalma listeleri (HLS/DASH) tüm kaliteleri içerdiği için önce gösterilir.
   const order = { HLS: 0, DASH: 1, Video: 2 };
   items.sort((a, b) => order[a.kind] - order[b.kind] || a.time - b.time);
-  listEl.replaceChildren(...items.map((item) => renderItem(item, tab)));
+  const children = items.map((item, i) => renderItem(item, tab, i + 1));
+  if (items.length > 1) {
+    const hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent =
+      "Aynı videonun farklı kaliteleri ayrı satırlar olarak görünebilir. İlk satır genelde tüm kaliteleri " +
+      "içerir; ApexTube analizden sonra hangi kalitelerin olduğunu gösterir.";
+    children.unshift(hint);
+  }
+  listEl.replaceChildren(...children);
 }
 
 init();
