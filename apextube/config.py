@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Uygulama Bilgileri
 APP_NAME = "ApexTube 8K Downloader"
-APP_VERSION = "1.1.0"  # yayinla.ps1 tarafından güncellenir
+APP_VERSION = "1.1.1"  # yayinla.ps1 tarafından güncellenir
 APP_AUTHOR = "Furkan"
 
 # Güncellemelerin yayınlandığı GitHub deposu (Releases)
