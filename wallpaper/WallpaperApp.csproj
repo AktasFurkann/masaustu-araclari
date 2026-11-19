@@ -25,7 +25,7 @@
     <AssemblyTitle>Hareketli Duvar Kağıdı</AssemblyTitle>
     <Product>Hareketli Duvar Kağıdı</Product>
     <Description>4K Hareketli Masaüstü Duvar Kağıdı</Description>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Prefer32Bit>false</Prefer32Bit>
